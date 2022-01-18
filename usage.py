@@ -79,20 +79,20 @@ if __name__ == "__main__":
         logger.info("Spotify Authorization error")
         sys.exit(1)
 
-    # logger.info("Starting spotify saved track sync")
-    # try:
-    #     sp_saved_tracks = get_sp_user_saved_tracks(sp)
-    #     if DOWNLOAD_MISSING:
-    #         deemix_tracks = [(track['track']['name'], track['track']['artists'][0]['name'], track['track']['album']['name']) for track in sp_saved_tracks]
-    #         download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM)
-    #     plex_tracks = [(track['track']['name'], track['track']['artists'][0]['name']) for track in sp_saved_tracks]
-    #     trackList = get_available_plex_tracks(plex, plex_tracks)
-    #     create_plex_playlist(plex, tracksList=trackList,
-    #                             playlistName="Saved Songs [Spotify]")
-    # except Exception as e:
-    #     if DEBUG:
-    #         raise e
-    #     logger.error("Failed to retrieve saved tracks")
+    logger.info("Starting spotify saved track sync")
+    try:
+        sp_saved_tracks = get_sp_user_saved_tracks(sp)
+        if DOWNLOAD_MISSING:
+            deemix_tracks = [(track['track']['name'], track['track']['artists'][0]['name'], track['track']['album']['name']) for track in sp_saved_tracks]
+            download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM)
+        plex_tracks = [(track['track']['name'], track['track']['artists'][0]['name']) for track in sp_saved_tracks]
+        trackList = get_available_plex_tracks(plex, plex_tracks)
+        create_plex_playlist(plex, tracksList=trackList,
+                                playlistName="Saved Songs [Spotify]")
+    except Exception as e:
+        if DEBUG:
+            raise e
+        logger.error("Failed to retrieve saved tracks")
 
 
     logger.info("Starting spotify playlist sync")
