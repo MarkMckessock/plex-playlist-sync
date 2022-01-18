@@ -1,30 +1,37 @@
 import os
 import time
+import sys
+import logging
 
-import deezer
+from deezer import Deezer
 import spotipy
 from plexapi.server import PlexServer
-from spotipy.oauth2 import SpotifyClientCredentials
-
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth, CacheFileHandler
 from helper import *
+from download import download_tracks
+
+logger = logging.getLogger("spotify-plex-sync")
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%m/%d/%Y %I:%M:%S')
 
 # Read ENV variables
 PLEX_URL = os.environ.get('PLEX_URL')
 PLEX_TOKEN = os.environ.get('PLEX_TOKEN')
+PLEX_MUSIC_LIBARY = os.getenv("PLEX_MUSIC_LIBRARY", "")
+
+DEBUG = (os.getenv("DEBUG","False") == "True")
 
 SPOTIPY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID')
 SPOTIPY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET')
 SPOTIFY_USER_ID = os.environ.get('SPOTIFY_USER_ID')
+DOWNLOAD_MISSING = (os.getenv("DOWNLOAD_MISSING",'False') == "True")
+DOWNLOAD_ALBUM = (os.getenv("DOWNLOAD_ALBUM",'False') == "True")
+MUSIC_PATH = os.getenv("MUSIC_PATH", "/music")
+DEEZER_ARL = os.environ.get('DEEZER_ARL')
 
-DEEZER_USER_ID = os.environ.get('DEEZER_USER_ID')
-DEEZER_PLAYLIST_IDS = os.environ.get('DEEZER_PLAYLIST_ID')
+if DEBUG:
+    logger.setLevel(logging.DEBUG)
 
-WAIT_SECONDS = int(os.environ.get('SECONDS_TO_WAIT'))
-
-SPAUTHSUCCESS = False
-
-
-def auth_spotify(client_id: str, client_secret: str):
+def auth_spotify(client_id: str, client_secret: str, scope: str = "user-library-read"):
     """Creates a spotify authenticator
 
     Args:
@@ -34,87 +41,78 @@ def auth_spotify(client_id: str, client_secret: str):
     Returns:
         sp: spotify configured client
     """
-    auth = SpotifyClientCredentials(client_id, client_secret)
-    return spotipy.Spotify(auth_manager=auth)
+    return spotipy.Spotify(auth_manager=SpotifyOAuth(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri="http://localhost",
+        scope=scope,
+        open_browser=False,
+        cache_handler=CacheFileHandler("/oauth/.cache")
+        )
+    )
 
 
-while True:
-    logging.info("Starting playlist sync")
+if __name__ == "__main__":
+    logger.info("Starting playlist sync")
 
-    if PLEX_URL and PLEX_TOKEN:
+    try:
+        plex = PlexServer(PLEX_URL, PLEX_TOKEN)
+    except Exception as e:
+        if DEBUG:
+            raise e
+        logger.error("Plex Authorization error")
+        sys.exit(1)
+
+    if DOWNLOAD_MISSING:
         try:
-            plex = PlexServer(PLEX_URL, PLEX_TOKEN)
-        except:
-            logging.error("Plex Authorization error")
-            break
+            dz = Deezer()  
+            dz.login_via_arl(DEEZER_ARL)
+        except: 
+            logger.error("Failed to authentication to Deezer")
+            sys.exit(1)
 
-    if SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET and SPOTIFY_USER_ID:
-        try:
-            sp = auth_spotify(SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET)
-            SPAUTHSUCCESS = True
-        except:
-            logging.info("Spotify Authorization error, skipping spotify sync")
+    try:
+        sp = auth_spotify(SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET)
+    except Exception as e:
+        if DEBUG:
+            raise e
+        logger.info("Spotify Authorization error")
+        sys.exit(1)
 
-    dz = deezer.Client()
+    logger.info("Starting spotify saved track sync")
+    try:
+        sp_saved_tracks = get_sp_user_saved_tracks(sp)
+        if DOWNLOAD_MISSING:
+            deemix_tracks = [(track['track']['name'], track['track']['artists'][0]['name'], track['track']['album']['name']) for track in sp_saved_tracks]
+            download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM)
+        plex_tracks = [(track['track']['name'], track['track']['artists'][0]['name']) for track in sp_saved_tracks]
+        trackList = get_available_plex_tracks(plex, plex_tracks)
+        create_plex_playlist(plex, tracksList=trackList,
+                                playlistName="Saved Songs [Spotify]")
+    except Exception as e:
+        if DEBUG:
+            raise e
+        logger.error("Failed to retrieve saved tracks")
 
-    # spotify playlists
-    if SPAUTHSUCCESS:
-        logging.info("Starting spotify playlist sync")
-        try:
-            sp_playlists = get_sp_user_playlists(sp=sp, userId=SPOTIFY_USER_ID)
-        except:
-            logging.error("Spotify User ID Error")
-            sp_playlists = []
 
-        if not sp_playlists:
-            logging.error("No spotify playlists found for given user")
-        else:
-            for playlist, name in sp_playlists:
-                track_names = get_sp_track_names(sp, SPOTIFY_USER_ID, playlist)
-                trackList = get_available_plex_tracks(plex, track_names)
-                create_plex_playlist(plex, tracksList=trackList,
-                                     playlistName=name+" - Spotify")
-            logging.info("Spotify playlist sync complete")
-
-    # deezer playlists
-    logging.info("Starting Deezer playlist sync")
-    dz_user_playlists, dz_id_playlists = [], []
-    if DEEZER_USER_ID:
-        try:
-            dz_user_playlists = get_dz_user_playlists(
-                dz=dz, userId=DEEZER_USER_ID
-            )
-        except:
-            dz_user_playlists = []
-            logging.info(
-                "Can't get playlists from this user, skipping deezer user playlists"
-            )
-
-    if DEEZER_PLAYLIST_IDS:
-        try:
-            dz_id_playlists = get_dz_playlists_by_ids(
-                dz=dz, playlistIds=DEEZER_PLAYLIST_IDS
-            )
-        except:
-            dz_id_playlists = []
-            logging.info(
-                "Unable to get the playlists from given ids, skipping deezer playlists for IDs"
-            )
-
-    dz_playlists = dz_user_playlists + dz_id_playlists
-    # remove duplicates if any
-    dz_playlists = [list(t) for t in set([tuple(t) for t in dz_playlists])]
-
-    if not dz_playlists:
-        logging.error("No deezer playlist code(s) found")
-    else:
-        for playlist, name in dz_playlists:
-            track_names = get_dz_playlist_track_names(dz, playlist)
-            trackList = get_available_plex_tracks(plex, track_names)
+    logger.info("Starting spotify playlist sync")
+    try:
+        sp_playlists = get_sp_user_playlists(sp=sp, userId=SPOTIFY_USER_ID)
+        for playlist, name in sp_playlists:
+            tracks = get_sp_track_names(sp, SPOTIFY_USER_ID, playlist)
+            if DOWNLOAD_MISSING:
+                deemix_tracks = [(track['track']['name'], track['track']['artists'][0]['name'], track['track']['album']['name']) for track in tracks]
+                download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM)
+            plex_tracks = [(track['track']['name'], track['track']['artists'][0]['name']) for track in tracks]
+            trackList = get_available_plex_tracks(plex, plex_tracks)
             create_plex_playlist(plex, tracksList=trackList,
-                                 playlistName=name+" - Deezer")
-        logging.info("Deezer playlist sync complete")
+                                playlistName=f"{name} [Spotify]")
+        logger.info("Spotify playlist sync complete")
+    except:
+        logger.error("Failed to retrieve playlists")  
 
-    logging.info("All playlist(s) sync complete")
-    logging.info("sleeping for %s seconds" % WAIT_SECONDS)
-    time.sleep(WAIT_SECONDS)
+    if PLEX_MUSIC_LIBARY:
+        logger.info(f"Updating Plex Library \"{PLEX_MUSIC_LIBARY}\"")
+        update_plex_library(plex, PLEX_MUSIC_LIBARY)
+
+    logger.info("All playlist(s) sync complete")
