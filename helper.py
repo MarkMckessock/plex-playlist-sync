@@ -50,24 +50,6 @@ def get_sp_playlist_tracks(sp, userId: str, playlistId: str):
         tracks.extend(results['items'])
     return tracks
 
-
-def get_sp_track_names(sp, userId: str, playlistId: str):
-    """Returns the track names, artists of the given spotify playlist
-
-    Args:
-        sp ([type]): Spotify configured instance
-        userId (str): UserId of the spotify account
-        playlistId (str): Playlist URI
-
-    Returns:
-        zip(list, list): A zip object of track name and corresponding artist
-    """
-    trackNames, artistNames = [], []
-    tracks = get_sp_playlist_tracks(sp, userId, playlistId)
-
-    return track
-
-
 ######################## Deezer Helpers #########################
 
 def get_dz_track_from_name(dz, track_name: str, artist: str, album: str):
