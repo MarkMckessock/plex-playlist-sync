@@ -15,6 +15,7 @@ settings.update({
   "maxBitrate": "9",
   "fallbackBitrate": True,
   "fallbackSearch": True,
+  "albumNameTemplate": "%album% (%year%)",
 })
 
 def download_tracks(dz, track_list: List[Tuple[str,str,str]], download_album: bool = False, music_path: str = "/music", bitrate: TrackFormats = TrackFormats.FLAC):
