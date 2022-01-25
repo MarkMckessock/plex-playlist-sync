@@ -27,6 +27,7 @@ def download_tracks(dz, track_list: List[Tuple[str,str,str]], download_album: bo
       if download_album:
         album = dz.api.get_album(track["data"][0]["album"]["id"])
         link = album["link"]
+        logger.info(f"Downloading album \"{album['data'][0]['title']}\" for track \"{track['data'][0]['title']}\"")
       else:
         link = track["data"][0]["link"]
       dl = deemix.generateDownloadObject(dz, link, bitrate)
