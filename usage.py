@@ -84,7 +84,7 @@ if __name__ == "__main__":
         sp_saved_tracks = get_sp_user_saved_tracks(sp)
         if DOWNLOAD_MISSING:
             deemix_tracks = [(track['track']['name'], track['track']['artists'][0]['name'], track['track']['album']['name']) for track in sp_saved_tracks]
-            download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM)
+            download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM, DEBUG)
         plex_tracks = [(track['track']['name'], track['track']['artists'][0]['name']) for track in sp_saved_tracks]
         trackList = get_available_plex_tracks(plex, plex_tracks)
         create_plex_playlist(plex, tracksList=trackList,
@@ -102,7 +102,7 @@ if __name__ == "__main__":
             tracks = get_sp_playlist_tracks(sp, SPOTIFY_USER_ID, playlist)
             if DOWNLOAD_MISSING:
                 deemix_tracks = [(track['track']['name'], track['track']['artists'][0]['name'], track['track']['album']['name']) for track in tracks]
-                download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM)
+                download_tracks(dz, deemix_tracks, DOWNLOAD_ALBUM, DEBUG)
             plex_tracks = [(track['track']['name'], track['track']['artists'][0]['name']) for track in tracks]
             trackList = get_available_plex_tracks(plex, plex_tracks)
             create_plex_playlist(plex, tracksList=trackList,
